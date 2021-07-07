@@ -1,0 +1,41 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+unregister_script = %{
+if subscription-manager status; then
+  sudo subscription-manager unregister
+fi
+}
+
+Vagrant.configure("2") do |config|
+  config.vagrant.plugins = ["vagrant-env", "vagrant-vbguest"]
+  config.env.enable # https://github.com/gosuri/vagrant-env
+
+  config.vm.box = "generic/rhel8"
+  config.vm.hostname = "JC-VM-lab-rhel8"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "lab-rhel8"
+    vb.gui = true
+    vb.cpus = 4
+    vb.memory = 4096
+    vb.customize ["modifyvm", :id, "--clipboard", "bidirectional"]
+  end  
+
+  config.vm.network "private_network", ip: "192.168.56.10"
+  config.vm.network "public_network", bridge: "wlp6s0"
+  
+  config.vm.provision "shell", path: "bootstrap.sh", args: "#{ENV['RH_SUBSCRIPTION_USER']} #{ENV['RH_SUBSCRIPTION_PW']}"
+
+  config.vm.synced_folder ".", "/vagrant"
+    #type: "nfs",
+    #nfs_udp: false
+
+  config.trigger.before :destroy do |trigger|
+    trigger.name = "Before Destroy Trigger"
+    trigger.info = "Unregistering this VM from Red Hat Subscription Manager"
+    trigger.warn = "If this fails, unregister VMs manually at https://access.redhat.com/management/subscriptions"
+    trigger.run_remote = {inline: unregister_script}
+    trigger.on_error = :continue
+  end
+end
